@@ -1,4 +1,10 @@
-import { Payload, ParseError, RPCError, InternalError, MethodNotFoundError } from './types'
+import {
+    Payload,
+    ParseError,
+    RPCError,
+    InternalError,
+    MethodNotFoundError
+} from './types'
 
 export class JSONRPC {
     private readonly _send: (payload: Payload, isRequest: boolean) => Promise<void>
@@ -8,9 +14,13 @@ export class JSONRPC {
     }>()
     private _nextId = 1
     private _handler?: JSONRPC.Handler
+    private _error: Error | null = null
 
     constructor(send: (data: string, isRequest: boolean) => Promise<void>) {
         this._send = (payload, isRequest) => {
+            if (this._error) {
+                return Promise.reject(this._error)
+            }
             return send(JSON.stringify(payload), isRequest)
         }
     }
@@ -76,6 +86,14 @@ export class JSONRPC {
                     }
                 }
             }
+        }
+    }
+    public setError(err: Error | null) {
+        this._error = err
+        if (err) {
+            const values = Array.from(this._ongoings.values())
+            this._ongoings.clear()
+            values.forEach(v => v.reject(err))
         }
     }
 
