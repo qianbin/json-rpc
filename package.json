@@ -1,7 +1,7 @@
 {
   "name": "@vechain/json-rpc",
-  "version": "0.9.1",
-  "description": "JSON RPC stack",
+  "version": "1.0.0-beta1",
+  "description": "Transport-independent JSON RPC 2.0 protocol stack",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -28,5 +28,8 @@
     "ts-node": "^8.3.0",
     "tslint": "^5.19.0",
     "typescript": "^3.6.2"
+  },
+  "dependencies": {
+    "validator-ts": "^0.9.1"
   }
 }
