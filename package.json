@@ -1,6 +1,6 @@
 {
   "name": "@vechain/json-rpc",
-  "version": "1.0.0-beta3",
+  "version": "1.0.0-beta4",
   "description": "Transport-independent JSON RPC 2.0 protocol stack",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
