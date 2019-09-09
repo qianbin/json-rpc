@@ -175,12 +175,14 @@ export class JSONRPC {
     }
 }
 
+const errorClass = Error
+
 export namespace JSONRPC {
     export type Send = (data: string, isRequest: boolean) => Promise<void>
     export type MethodImpl = (...args: any[]) => any
     export type Handler = (method: string) => (MethodImpl | undefined)
 
-    export class Error extends globalThis.Error {
+    export class Error extends errorClass {
         public static parseError(reason: string) {
             return new Error(`Parse error: ${reason}`, -32700)
         }
