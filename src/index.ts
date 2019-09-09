@@ -1,11 +1,4 @@
-import {
-    Payload,
-    BaseError,
-    ParseError,
-    MethodNotFoundError,
-    InternalError,
-    InvalidRequestError
-} from './types'
+import { Payload } from './payload'
 
 /** Transport-independent JSON RPC 2.0 protocol stack */
 export class JSONRPC {
@@ -91,13 +84,13 @@ export class JSONRPC {
         try {
             payload = JSON.parse(data) as Payload
         } catch (err) {
-            throw new ParseError(err)
+            throw JSONRPC.Error.parseError(err.message)
         }
 
         try {
             Payload.validate(payload, isRequest)
         } catch (err) {
-            throw new InvalidRequestError(err)
+            throw JSONRPC.Error.invalidRequest(err.message)
         }
 
         if (isRequest) {
@@ -142,10 +135,10 @@ export class JSONRPC {
                     throw err
                 }
 
-                if (err instanceof BaseError) {
+                if (err instanceof JSONRPC.Error) {
                     await this._send(err.asPayload(payload.id), false)
                 } else {
-                    await this._send(new InternalError(err).asPayload(payload.id), false)
+                    await this._send(JSONRPC.Error.internalError(err.message).asPayload(payload.id), false)
                 }
                 return
             }
@@ -159,7 +152,7 @@ export class JSONRPC {
             }
 
         } else {
-            const err = new MethodNotFoundError()
+            const err = JSONRPC.Error.methodNotFound()
             if (hasId) {
                 await this._send(err.asPayload(payload.id!), false)
             } else {
@@ -175,7 +168,7 @@ export class JSONRPC {
         }
         this._ongoings.delete(payload.id!)
         if (payload.error) {
-            ongoing.reject(new Error(`${payload.error.message} (${payload.error.code})`))
+            ongoing.reject(new JSONRPC.Error(payload.error.message, payload.error.code, payload.error.data))
         } else {
             ongoing.resolve(payload.result)
         }
@@ -187,15 +180,43 @@ export namespace JSONRPC {
     export type MethodImpl = (...args: any[]) => any
     export type Handler = (method: string) => (MethodImpl | undefined)
 
-    export class ServerError extends BaseError {
-        constructor(code: number, data: any) {
-            super('Server error', code, data)
+    export class Error extends globalThis.Error {
+        public static parseError(reason: string) {
+            return new Error(`Parse error: ${reason}`, -32700)
         }
-    }
+        public static invalidRequest(reason: string) {
+            return new Error(`Invalid request: ${reason}`, -32600)
+        }
+        public static methodNotFound() {
+            return new Error('Method not found', -32601)
+        }
+        public static invalidParams(reason: string) {
+            return new Error(`Invalid params: ${reason}`, -32602)
+        }
+        public static internalError(reason: string) {
+            return new Error(`Internal error: ${reason}`, -32603)
+        }
+        public static serverError(reason: string, code: number, data?: any) {
+            return new Error(`Server error: ${reason}`, code, data)
+        }
 
-    export class InvalidParamsError extends BaseError {
-        constructor() {
-            super('Invalid params', -32602)
+        constructor(
+            message: string,
+            readonly code: number,
+            readonly data?: any) {
+            super(message)
+        }
+
+        public asPayload(id?: number | string | null): Payload {
+            return {
+                jsonrpc: '2.0',
+                id,
+                error: {
+                    code: this.code,
+                    message: this.message,
+                    data: this.data
+                }
+            }
         }
     }
 }
