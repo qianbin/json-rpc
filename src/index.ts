@@ -1,8 +1,15 @@
-import * as T from './types'
+import {
+    Payload,
+    BaseError,
+    ParseError,
+    MethodNotFoundError,
+    InternalError,
+    InvalidRequestError
+} from './types'
 
 /** Transport-independent JSON RPC 2.0 protocol stack */
 export class JSONRPC {
-    private readonly _send: (payload: T.Payload, isRequest: boolean) => Promise<void>
+    private readonly _send: (payload: Payload, isRequest: boolean) => Promise<void>
     private readonly _generateId: () => (number | string)
     private readonly _ongoings = new Map<number | string, {
         resolve: (result: any) => void
@@ -41,7 +48,7 @@ export class JSONRPC {
      */
     public call(method: string, ...params: any[]) {
         const id = this._generateId()
-        const payload: T.Payload = {
+        const payload: Payload = {
             jsonrpc: '2.0',
             id,
             method,
@@ -66,7 +73,7 @@ export class JSONRPC {
      * @param params params for notification
      */
     public notify(method: string, ...params: any[]) {
-        const payload: T.Payload = {
+        const payload: Payload = {
             jsonrpc: '2.0',
             method,
             params
@@ -80,12 +87,17 @@ export class JSONRPC {
      * @param isRequest whether the payload is request type
      */
     public async receive(data: string, isRequest: boolean) {
-        let payload: T.Payload
+        let payload: Payload
         try {
-            payload = JSON.parse(data) as T.Payload
-            T.Payload.validate(payload, isRequest)
+            payload = JSON.parse(data) as Payload
         } catch (err) {
-            throw new T.ParseError(err)
+            throw new ParseError(err)
+        }
+
+        try {
+            Payload.validate(payload, isRequest)
+        } catch (err) {
+            throw new InvalidRequestError(err)
         }
 
         if (isRequest) {
@@ -117,22 +129,23 @@ export class JSONRPC {
         this._handler = handler
     }
 
-    private async _handleRequest(payload: T.Payload) {
+    private async _handleRequest(payload: Payload) {
         const impl = this._handler ? this._handler(payload.method!) : undefined
         const hasId = payload.id !== undefined && payload.id !== null
         if (impl) {
             let result
 
             try {
-                result = await impl(payload.params!)
+                result = await impl(...payload.params!)
             } catch (err) {
                 if (!hasId) {
                     throw err
                 }
-                if (err instanceof T.BaseError) {
-                    await this._send(err.asPayload(), false)
+
+                if (err instanceof BaseError) {
+                    await this._send(err.asPayload(payload.id), false)
                 } else {
-                    await this._send(new T.InternalError(payload.id!, err).asPayload(), false)
+                    await this._send(new InternalError(err).asPayload(payload.id), false)
                 }
                 return
             }
@@ -146,16 +159,16 @@ export class JSONRPC {
             }
 
         } else {
-            const err = new T.MethodNotFoundError(payload.id!)
+            const err = new MethodNotFoundError()
             if (hasId) {
-                await this._send(new T.MethodNotFoundError(payload.id!).asPayload(), false)
+                await this._send(err.asPayload(payload.id!), false)
             } else {
                 throw err
             }
         }
     }
 
-    private _handleResponse(payload: T.Payload) {
+    private _handleResponse(payload: Payload) {
         const ongoing = this._ongoings.get(payload.id!)
         if (!ongoing) {
             return
@@ -171,6 +184,18 @@ export class JSONRPC {
 
 export namespace JSONRPC {
     export type Send = (data: string, isRequest: boolean) => Promise<void>
-    export type MethodImpl = (args: any[]) => any
+    export type MethodImpl = (...args: any[]) => any
     export type Handler = (method: string) => (MethodImpl | undefined)
+
+    export class ServerError extends BaseError {
+        constructor(code: number, data: any) {
+            super('Server error', code, data)
+        }
+    }
+
+    export class InvalidParamsError extends BaseError {
+        constructor() {
+            super('Invalid params', -32602)
+        }
+    }
 }

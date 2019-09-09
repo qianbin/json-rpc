@@ -55,17 +55,18 @@ export class BaseError extends Error {
     constructor(
         message: string,
         readonly code: number,
-        readonly id?: number | string) {
+        readonly data?: any) {
         super(message)
     }
 
-    public asPayload(): Payload {
+    public asPayload(id?: number | string | null): Payload {
         return {
             jsonrpc: '2.0',
-            id: this.id,
+            id,
             error: {
                 code: this.code,
-                message: this.message
+                message: this.message,
+                data: this.data
             }
         }
     }
@@ -78,43 +79,19 @@ export class ParseError extends BaseError {
 }
 
 export class InvalidRequestError extends BaseError {
-    constructor() {
-        super('Invalid request', -32600)
+    constructor(err: Error) {
+        super(`Invalid request: ${err.message}`, -32600)
     }
 }
 
 export class MethodNotFoundError extends BaseError {
-    constructor(id: number | string) {
-        super('Method not found', -32601, id)
-    }
-}
-
-export class InvalidParamsError extends BaseError {
-    constructor(id: number | string) {
-        super('Invalid params', -32602, id)
+    constructor() {
+        super('Method not found', -32601)
     }
 }
 
 export class InternalError extends BaseError {
-    constructor(id: number | string, err: Error) {
-        super(`Internal error: ${err.message}`, -32603, id)
-    }
-}
-
-export class ServerError extends BaseError {
-    constructor(id: number, code: number, readonly data: any) {
-        super('Server error', code, id)
-    }
-
-    public asPayload(): Payload {
-        return {
-            jsonrpc: '2.0',
-            id: this.id,
-            error: {
-                code: this.code,
-                message: this.message,
-                data: this.data
-            }
-        }
+    constructor(err: Error) {
+        super(`Internal error: ${err.message}`, -32603)
     }
 }
